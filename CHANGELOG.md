@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.1 - Bug Fixes (March 2025)
+-  Fixed logic that was skipping downloads incorrectly.
+-  Improved handling of metadata checking.
+-  Ensured metadata embedding only runs on existing files.
+
 ## v1.1.0 - Performance & Metadata Enhancements (March 2025)
 -  Skips re-embedding metadata if it's already present (huge speed boost!)
 -  Improved `ffprobe` handling to prevent JSON errors
