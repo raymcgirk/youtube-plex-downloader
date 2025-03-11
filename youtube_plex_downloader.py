@@ -105,6 +105,7 @@ YTDLP_OPTIONS = [
     "--merge-output-format", "mp4",
     "--remux-video", "mp4",
     "--no-part",
+    "--force-overwrites",
     "--write-thumbnail",
     "--convert-thumbnails", "jpg",
     "--embed-metadata",
@@ -134,26 +135,6 @@ def sanitize_filename(title):
     # title = title.encode("utf-8", "ignore").decode("utf-8")  # ✅ Strip weird characters
     return title.strip()  # ✅ Remove any trailing spaces
             
-# def force_correct_timestamps(file_path, upload_date):
-    # """Set 'Date Modified' and 'Date Created' to the correct upload date."""
-    # if os.name == "nt":
-        # formatted_windows_date = upload_date.strftime("%m/%d/%Y %H:%M:%S")
-        # logging.info(f"🔄 Setting timestamps for: {file_path} → {formatted_windows_date}")
-
-        # powershell_cmd = [
-            # "powershell", "-Command",
-            # f"$file = Get-Item \"{file_path}\"; "
-            # f"$file.LastWriteTime = \"{formatted_windows_date}\"; "
-            # f"$file.CreationTime = \"{formatted_windows_date}\"; "
-            # f"$file.LastAccessTime = \"{formatted_windows_date}\""
-        # ]
-
-        # try:
-            # subprocess.run(powershell_cmd, check=True)
-            # logging.info(f"✅ Updated timestamps for {file_path}")
-        # except subprocess.CalledProcessError as e:
-            # logging.error(f"⚠️ Failed to update timestamps: {e}")
-
 def load_cache():
     """Load cached video list to avoid unnecessary re-scanning."""
     if os.path.exists(CACHE_FILE):
@@ -203,15 +184,49 @@ def get_all_videos():
     logging.info("✅ Video cache updated.")
     return video_list
 
+def has_existing_metadata(video_path, upload_date):
+    """Check if the video file already has the correct upload date metadata."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_entries", "format_tags", video_path],
+            capture_output=True, text=True, encoding="utf-8", check=False  # ✅ Enforce UTF-8, avoid crashing on errors
+        )
+
+        if result.returncode != 0:
+            logging.error(f"⚠️ ffprobe failed for {video_path}. Exit code: {result.returncode}")
+            return False
+
+        if not result.stdout:  # ✅ Prevent 'NoneType' error
+            logging.warning(f"⚠️ ffprobe returned no metadata for {video_path}. Assuming missing metadata.")
+            return False
+
+        try:
+            metadata = json.loads(result.stdout).get("format", {}).get("tags", {})
+        except json.JSONDecodeError as e:
+            logging.error(f"⚠️ JSON decoding error for {video_path}: {e}")
+            return False
+
+        logging.info(f"🔍 ffprobe metadata for {video_path}: {metadata}")
+
+        expected_date = upload_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        return metadata.get("date") == expected_date or metadata.get("originally_available") == expected_date
+
+    except Exception as e:
+        logging.error(f"⚠️ Unexpected error checking metadata for {video_path}: {e}")
+        return False
+
 def apply_upload_dates(video_path, upload_date):
     """Apply the correct upload date timestamp to a single downloaded video."""
     if not os.path.exists(video_path):
         logging.error(f"⚠️ File not found: {video_path}")
         return
 
-    try:
-        # force_correct_timestamps(video_path, upload_date)
+    if has_existing_metadata(video_path, upload_date):
+        logging.info(f"✅ Metadata already set for {video_path}. Skipping embedding.")
+        return  # ✅ Skip processing if metadata is already correct
 
+    try:
         formatted_plex_date = upload_date.strftime("%Y-%m-%dT%H:%M:%SZ")  # ✅ Plex-compatible format
 
         # ✅ Embed metadata into the video using FFmpeg
@@ -277,27 +292,6 @@ def download_oldest_videos():
             apply_upload_dates(video_path, upload_date)
         except ValueError as e:
             logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
-            
-    # sorted_videos = []
-    # for channel, video_list in videos.items():
-        # sorted_videos.extend(video_list)
-    # sorted_videos.sort(key=lambda v: v["upload_date"])  # ✅ Sort by upload_date
-
-    # for video in sorted_videos:  # ✅ Loop over sorted list
-        # sanitized_title = sanitize_filename(video["title"])  # ✅ Apply sanitize_filename()
-        # video_path = DOWNLOAD_PATH % {
-            # "uploader": video.get("uploader", "UnknownUploader"),
-            # "title": sanitized_title,
-            # "ext": "mp4"
-        # }
-
-        # # ✅ Check if the video is already in downloaded.txt (avoid unnecessary downloads)
-        # if os.path.exists(DOWNLOAD_ARCHIVE):
-            # with open(DOWNLOAD_ARCHIVE, "r", encoding="utf-8") as f:
-                # downloaded_videos = f.read()
-            # if video["url"] in downloaded_videos:
-                # logging.info(f"✅ Already downloaded (tracked in downloaded.txt): {video['title']}")
-                # continue
 
         logging.info(f"📥 Downloading: {video['title']} ({video['upload_date']})")
         command = YTDLP_OPTIONS + [video["url"]]
@@ -314,11 +308,6 @@ def download_oldest_videos():
             if "Downloading" in line or "Merging formats into" in line:
                 logging.info(line)  # ✅ Only log important messages
 
-        # for line in process.stdout:
-            # logging.info(line.strip())
-            # if "has already been recorded in the archive" in line:
-                # already_in_archive = True  # ✅ Mark it as archived
-
         process.wait()
 
         if process.returncode != 0:
@@ -327,10 +316,6 @@ def download_oldest_videos():
 
         if not os.path.exists(video_path):
             logging.error(f"⚠️ File missing after download: {video_path}")
-
-        # # ✅ Apply timestamps **only to the downloaded file**
-        # upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
-        # apply_upload_dates(video_path, upload_date)
 
         # ✅ Skip sleep if yt-dlp reported "already in archive"
         if already_in_archive:
