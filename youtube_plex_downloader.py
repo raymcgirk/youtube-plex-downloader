@@ -35,60 +35,60 @@ CHANNELS = [
     # "https://www.youtube.com/@CallMeKevin",
     # "https://www.youtube.com/@CarbotAnimations",
     # "https://www.youtube.com/@CartNarcs",
-    "https://www.youtube.com/@ChatHistory",
-    "https://www.youtube.com/@ClimateTown",
+    # "https://www.youtube.com/@ChatHistory",
+    # "https://www.youtube.com/@ClimateTown",
     # "https://www.youtube.com/@ComedyCentral",
     # "https://www.youtube.com/@CopsTV",
-    "https://www.youtube.com/@DougDoug",
-    "https://www.youtube.com/@dougdougdoug",
+    # "https://www.youtube.com/@DougDoug",
+    # "https://www.youtube.com/@dougdougdoug",
     # "https://www.youtube.com/@dougdougdougdoug",
     # "https://www.youtube.com/@ExploreWithUs",
-    "https://www.youtube.com/@FormerlyBlue",
+    # "https://www.youtube.com/@FormerlyBlue",
     # "https://www.youtube.com/@FreeDocumentary",
     # "https://www.youtube.com/@FreeDocumentaryNature",
     # "https://www.youtube.com/@Funhaus",
     # "https://www.youtube.com/@GameTheory",
     # "https://www.youtube.com/@HistoryMatters",
-    "https://www.youtube.com/@HorrorStories666",
-    "https://www.youtube.com/@IronPineapple",
-    "https://www.youtube.com/@JCS",
-    "https://www.youtube.com/@JaboodyDubs",
+    # "https://www.youtube.com/@HorrorStories666",
+    # "https://www.youtube.com/@IronPineapple",
+    # "https://www.youtube.com/@JCS",
+    # "https://www.youtube.com/@JaboodyDubs",
     # "https://www.youtube.com/@LawAndCrime",
     # "https://www.youtube.com/@LetsGameItOut",
-    "https://www.youtube.com/@LilAggy",
+    # "https://www.youtube.com/@LilAggy",
     # "https://www.youtube.com/@MrBallen",
     # "https://www.youtube.com/@MrBallensMedicalfanedit",
     # "https://www.youtube.com/@mrnightmare",
-    "https://www.youtube.com/@NanoBaiter",
+    # "https://www.youtube.com/@NanoBaiter",
     # "https://www.youtube.com/@NinjaWarrior",
-    "https://www.youtube.com/@NotJustBikes",
-    "https://www.youtube.com/@OverSimplified",
+    # "https://www.youtube.com/@NotJustBikes",
+    # "https://www.youtube.com/@OverSimplified",
     # "https://www.youtube.com/@RealCivilEngineerGaming",
     # "https://www.youtube.com/@RealLifeLore",
-    "https://www.youtube.com/@SamONellaAcademy",
+    # "https://www.youtube.com/@SamONellaAcademy",
     # "https://www.youtube.com/@SethsBikeHacks",
-    "https://www.youtube.com/@Shifter_Cycling",
+    # "https://www.youtube.com/@Shifter_Cycling",
     # "https://www.youtube.com/@SparkDocs",
-    "https://www.youtube.com/@Streetcraft",
-    "https://www.youtube.com/@TheLaughingSimon",
+    # "https://www.youtube.com/@Streetcraft",
+    # "https://www.youtube.com/@TheLaughingSimon",
     # "https://www.youtube.com/@ToastedShoes",
     # "https://www.youtube.com/@VivaLaDirtLeague",
-    "https://www.youtube.com/@WartimeStories",
+    # "https://www.youtube.com/@WartimeStories",
     # "https://www.youtube.com/@astrumspace",
     # "https://www.youtube.com/@distortion2",
-    "https://www.youtube.com/@eli_handle_bwav",
+    # "https://www.youtube.com/@eli_handle_bwav",
     # "https://www.youtube.com/@gcn",
     # "https://www.youtube.com/@jayveeeee",
-    "https://www.youtube.com/@kurzgesagt",
+    # "https://www.youtube.com/@kurzgesagt",
     # "https://www.youtube.com/@lockpickinglawyer",
     # "https://www.youtube.com/@mytruecrimenews",
-    "https://www.youtube.com/@oddheader",
-    "https://www.youtube.com/@reigarw",
+    # "https://www.youtube.com/@oddheader",
+    # "https://www.youtube.com/@reigarw",
     # "https://www.youtube.com/@sciencechannel",
-    "https://www.youtube.com/@streetscaping",
-    "https://www.youtube.com/@timthelawnmowerman",
-    "https://www.youtube.com/@tosh",
-    "https://www.youtube.com/@toshshow"
+    # "https://www.youtube.com/@streetscaping",
+    # "https://www.youtube.com/@timthelawnmowerman",
+    # "https://www.youtube.com/@tosh",
+    # "https://www.youtube.com/@toshshow"
 ]
 
 # Define file paths
@@ -186,31 +186,34 @@ def get_all_videos():
 
 def has_existing_metadata(video_path, upload_date):
     """Check if the video file already has the correct upload date metadata."""
+
+    # ✅ Ensure the file exists before checking metadata
+    if not os.path.exists(video_path):
+        logging.warning(f"⚠️ File not found: {video_path}. Skipping metadata check.")
+        return False  # ✅ Always return False if the file is missing
+
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_entries", "format_tags", video_path],
-            capture_output=True, text=True, encoding="utf-8", check=False  # ✅ Enforce UTF-8, avoid crashing on errors
+            capture_output=True, text=True, encoding="utf-8", check=False
         )
 
         if result.returncode != 0:
             logging.error(f"⚠️ ffprobe failed for {video_path}. Exit code: {result.returncode}")
             return False
 
-        if not result.stdout:  # ✅ Prevent 'NoneType' error
+        if not result.stdout.strip():
             logging.warning(f"⚠️ ffprobe returned no metadata for {video_path}. Assuming missing metadata.")
             return False
 
-        try:
-            metadata = json.loads(result.stdout).get("format", {}).get("tags", {})
-        except json.JSONDecodeError as e:
-            logging.error(f"⚠️ JSON decoding error for {video_path}: {e}")
-            return False
-
-        logging.info(f"🔍 ffprobe metadata for {video_path}: {metadata}")
+        metadata = json.loads(result.stdout).get("format", {}).get("tags", {})
 
         expected_date = upload_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+        has_metadata = metadata.get("date") == expected_date or metadata.get("originally_available") == expected_date
 
-        return metadata.get("date") == expected_date or metadata.get("originally_available") == expected_date
+        logging.info(f"🔍 Metadata check for {video_path}: {has_metadata}")
+
+        return has_metadata
 
     except Exception as e:
         logging.error(f"⚠️ Unexpected error checking metadata for {video_path}: {e}")
@@ -280,19 +283,27 @@ def download_oldest_videos():
                 logging.info(f" - {filename}")
             printed_folders.add(uploader_folder)
 
-        # ✅ Print expected filename
-        logging.info(f"🔍 Looking for: {video_path}")
+        # ✅ Check if the file already exists
+        if os.path.exists(video_path):
+            logging.info(f"✅ File already exists: {video_path}")
 
-        if not os.path.exists(video_path):
-            logging.error(f"⚠️ File not found: {video_path}")
-            continue
+            try:
+                upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
 
-        try:
-            upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
-            apply_upload_dates(video_path, upload_date)
-        except ValueError as e:
-            logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
+                # ✅ Check if metadata is missing
+                if not has_existing_metadata(video_path, upload_date):
+                    logging.info(f"🛠 Metadata missing. Embedding metadata for: {video_path}")
+                    apply_upload_dates(video_path, upload_date)
+                else:
+                    logging.info(f"✅ Metadata already embedded. Skipping metadata processing.")
+                
+                continue  # ✅ Skip to the next video since it's already downloaded
+            
+            except ValueError as e:
+                logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
+                continue  # ✅ Skip to the next video if metadata is invalid
 
+        # ✅ If file does NOT exist, download it
         logging.info(f"📥 Downloading: {video['title']} ({video['upload_date']})")
         command = YTDLP_OPTIONS + [video["url"]]
 
@@ -312,25 +323,29 @@ def download_oldest_videos():
 
         if process.returncode != 0:
             logging.error(f"⚠️ Download failed for {video['title']} with exit code {process.returncode}")
-            continue
+            continue  # ✅ Skip to the next video if yt-dlp fails
 
         if not os.path.exists(video_path):
             logging.error(f"⚠️ File missing after download: {video_path}")
+            continue  # ✅ Skip if yt-dlp reported success but the file still isn't there
+
+        # ✅ Embed metadata after downloading
+        try:
+            upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
+            apply_upload_dates(video_path, upload_date)
+        except ValueError as e:
+            logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
+            continue  # ✅ Skip if the upload date is invalid
 
         # ✅ Skip sleep if yt-dlp reported "already in archive"
         if already_in_archive:
             logging.info("⏭️ Skipping sleep since video was already recorded in the archive.")
             continue
         
-        # ✅ Skip sleep if the file was already found
-        if os.path.exists(video_path):
-            logging.info("⏭️ Skipping sleep since video file was already present.")
-            continue
-        
-        # ✅ Add a manual sleep after full downloads (not merging)
+        # ✅ Add a manual sleep after downloads (if needed)
         sleep_time = random.randint(30, 60)
         logging.info(f"⏳ Sleeping for {sleep_time} seconds before the next download...")
-        time.sleep(sleep_time)  # ✅ Always runs, unless it's the last video
+        time.sleep(sleep_time)  
             
 if __name__ == "__main__":
     download_oldest_videos()
