@@ -92,10 +92,10 @@ CHANNELS = [
 ]
 
 # Define file paths
-DOWNLOAD_PATH = r"\\mcgirk-server\video\YouTube\%(uploader)s\%(uploader)s - %(title)s.%(ext)s"
-DOWNLOAD_ARCHIVE = r"\\mcgirk-server\video\youtube\downloaded.txt"
-CACHE_FILE = r"\\mcgirk-server\video\youtube\video_cache.json"
-BASE_DIRECTORY = r"\\mcgirk-server\video\YouTube"
+DOWNLOAD_PATH = 
+DOWNLOAD_ARCHIVE = 
+CACHE_FILE = 
+BASE_DIRECTORY = 
 
 # yt-dlp options
 YTDLP_OPTIONS = [
