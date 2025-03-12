@@ -70,4 +70,4 @@ Edit config.json to set up your file paths and YouTube channels:
 ---
 
 ## 📜 License
-Licensed under the MIT License. See LICENSE for details.
+- Licensed under the MIT License. See LICENSE for details.
