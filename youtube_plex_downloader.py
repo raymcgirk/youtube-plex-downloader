@@ -85,7 +85,7 @@ def sanitize_filename(title):
     title = title.replace("?", "？")  # ✅ Convert normal `?` to full-width `？`
     # title = title.replace("&", "and")  # ✅ Convert ampersands
     title = title.replace("/", "⧸")  # ✅ Convert forward slashes into special forward slashes (`⧸`)
-    # title = title.replace("⧸", "")  # ✅ Remove special forward slashes (`⧸`)
+    title = title.replace('"', '＂')  # ✅ Convert quotation marks into special quotation marks (`＂`)
     title = title.replace(":", "：")  # ✅ Ensure `:` aligns with yt-dlp's behavior
     # title = title.encode("utf-8", "ignore").decode("utf-8")  # ✅ Strip weird characters
     return title.strip()  # ✅ Remove any trailing spaces
@@ -205,6 +205,44 @@ def apply_upload_dates(video_path, upload_date):
     except subprocess.CalledProcessError as e:
         logging.error(f"⚠️ Failed to embed metadata for {video_path}: {e}")
 
+def download_channel_thumbnail(channel_url, uploader):
+    """Downloads the YouTube channel's profile picture to staging, then moves it to Plex."""
+
+    # Paths for staging and final Plex destination
+    staging_folder = os.path.join(STAGING_DIRECTORY, uploader.lstrip("@"))
+    plex_folder = os.path.join(PLEX_DIRECTORY, uploader.lstrip("@"))
+
+    os.makedirs(staging_folder, exist_ok=True)  # Ensure staging folder exists
+    os.makedirs(plex_folder, exist_ok=True)  # Ensure Plex folder exists
+
+    staging_thumbnail_path = os.path.join(staging_folder, "folder.jpg")
+    plex_thumbnail_path = os.path.join(plex_folder, "folder.jpg")
+
+    try:
+        # ✅ Correct yt-dlp command to ONLY download the profile picture
+        subprocess.run([
+            "yt-dlp",
+            "--write-thumbnail",   # ✅ Forces yt-dlp to download only the thumbnail
+            "--skip-download",     # ✅ Prevents any videos from being downloaded
+            "--convert-thumbnails", "jpg",  # ✅ Ensures the output is a JPG
+            "--playlist-items", "0",  # ✅ Forces yt-dlp to avoid downloading videos
+            "-o", os.path.join(staging_folder, "folder"),  # ✅ Ensures correct save path
+            channel_url
+        ], check=True)
+
+        logging.info(f"✅ Downloaded thumbnail to staging: {staging_thumbnail_path}")
+
+        # ✅ Move thumbnail to Plex directory
+        shutil.move(staging_thumbnail_path, plex_thumbnail_path)
+        logging.info(f"✅ Moved thumbnail to Plex: {plex_thumbnail_path}")
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"⚠️ yt-dlp failed for {uploader}: {e}")
+    except FileNotFoundError:
+        logging.error(f"⚠️ Thumbnail file not found in staging: {staging_thumbnail_path}")
+    except Exception as e:
+        logging.error(f"⚠️ Unexpected error: {e}")
+
 def download_oldest_videos():
     """Ensure metadata is fetched, then download videos in chronological order."""
     update_yt_dlp()  # ✅ Ensure yt-dlp is up to date before downloading
@@ -219,6 +257,12 @@ def download_oldest_videos():
     if not videos:
         logging.info("⚠️ Still no videos found after fetching. Exiting.")
         return
+
+    # ✅ Now we download thumbnails—after confirming video metadata.
+    for channel in CHANNELS:
+        uploader = channel.split("/")[-1].lstrip("@")  # Remove '@' if present
+        logging.info(f"🔍 Downloading channel thumbnail for {uploader}...")
+        download_channel_thumbnail(channel, uploader)
 
     # ✅ Ensure videos are sorted by upload_date
     sorted_videos = []
@@ -256,26 +300,6 @@ def download_oldest_videos():
                 logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
                 continue  # ✅ Skip to the next video if metadata is invalid
 
-            # # ✅ Move file to Plex directory if processing is done
-            # final_uploader_folder = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"))
-            # final_video_path = os.path.join(final_uploader_folder, f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
-            
-            # # ✅ If the file is already in Plex, log it and skip moving
-            # if os.path.exists(final_video_path):
-                # logging.info(f"🔍 File already exists in PLEX: {final_video_path}")
-                # continue  # ✅ Skip moving this file
-
-            # if not os.path.exists(final_uploader_folder):
-                # os.makedirs(final_uploader_folder)  # ✅ Create folder if needed
-
-            # try:
-                # shutil.move(video_path, final_video_path)
-                # logging.info(f"✅ Successfully moved to PLEX: {final_video_path}")
-            # except Exception as e:
-                # logging.error(f"⚠️ Failed to move {video_path} to PLEX directory: {e}")
-                # continue  # ✅ Skip if move fails
-
-            # continue  # ✅ Skip to next video since it's already processed
         else:
             # ✅ Check both staging and Plex directories first
             final_video_path = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"),
@@ -316,13 +340,6 @@ def download_oldest_videos():
                 continue  # ✅ Skip to the next video if yt-dlp fails
 
             logging.info(f"🛠 Checking if file exists at: {video_path}")
-
-            # if not os.path.exists(video_path):
-                # if already_in_archive:
-                    # logging.info(f"🔄 File already in archive, skipping download: {video_path}")
-                # else:
-                    # logging.error(f"⚠️ Expected file missing after download: {video_path}")
-                # continue  # ✅ Skip if yt-dlp reported success but the file still isn't there
 
             # ✅ Check both staging and final destination before assuming it's missing
             final_video_path = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"),
