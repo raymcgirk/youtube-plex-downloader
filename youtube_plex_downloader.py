@@ -114,44 +114,62 @@ def save_cache(cache):
         json.dump(cache, f, indent=4)
 
 def get_all_videos():
-    """Fetch video metadata incrementally (only new videos)."""
+    """Fetch video metadata in real-time and save immediately to avoid long delays."""
     video_list = load_cache()
 
     for channel in CHANNELS:
-        latest_known = video_list.get(channel + "_latest", "20000101")  # Default to old date if none exists
-        
+        latest_known = video_list.get(channel + "_latest", "20000101")  # Default if none exists
         logging.info(f"📡 Fetching new videos from {channel} (only after {latest_known})")
 
+        new_video_count = 0  # ✅ Track how many new videos are added
+
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 ["yt-dlp", "--dateafter", latest_known, "--dump-json", channel],
-                capture_output=True, text=True, check=True
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1  # ✅ Process lines one-by-one instead of waiting for full output
             )
 
-            new_videos = []
-            for line in result.stdout.splitlines():
+            for line in process.stdout:
+                line = line.strip()
+                if not line:
+                    continue  # Skip empty lines
+
                 try:
                     video_data = json.loads(line)
-                    new_videos.append({
+                    video_entry = {
                         "title": video_data.get("title"),
                         "uploader": video_data.get("uploader", "UnknownUploader"),
                         "url": video_data.get("webpage_url"),
                         "upload_date": datetime.strptime(video_data.get("upload_date"), "%Y%m%d").isoformat()
-                    })
+                    }
+
+                    # ✅ Save each video immediately as it's processed
+                    if channel not in video_list:
+                        video_list[channel] = []
+                    video_list[channel].append(video_entry)
+                    save_cache(video_list)
+
+                    new_video_count += 1
+                    logging.info(f"✅ Saved video to cache: {video_entry['title']} ({video_entry['upload_date']})")
+
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
                     logging.error(f"⚠️ Skipping malformed video entry: {e}")
 
-            if new_videos:
-                if channel not in video_list:
-                    video_list[channel] = []  # ✅ Ensure the channel key exists before appending
-                
-                video_list[channel].extend(new_videos)  # Add new videos to cache
-                logging.info(f"✅ Added {len(new_videos)} new videos for {channel}")
+            process.wait()  # Ensure yt-dlp fully completes before moving to next channel
+
+            # ✅ If no new videos were found, log a warning
+            if new_video_count == 0:
+                logging.warning(f"⚠️ No new videos found for {channel} (nothing to download).")
 
         except subprocess.CalledProcessError as e:
-            logging.error(f"⚠️ Failed to fetch video list for {channel}: {e}")
+            if e.returncode == 2:
+                logging.warning(f"⚠️ No new videos found for {channel} (or channel is inaccessible).")
+            else:
+                logging.error(f"⚠️ Failed to fetch video list for {channel}: {e}")
 
-    save_cache(video_list)  # ✅ Save updated cache
     return video_list
 
 def has_existing_metadata(video_path, upload_date):
