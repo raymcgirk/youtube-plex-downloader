@@ -1,0 +1,7 @@
+# Ignore private config files
+config.json
+
+# Ignore Python cache & virtual environments
+__pycache__/
+*.pyc
+.venv/
