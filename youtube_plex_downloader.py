@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import shutil
 import subprocess
 import json
 import random
@@ -28,74 +29,27 @@ def remove_emojis(text):
     emoji_pattern = re.compile("[\U00010000-\U0010ffff]", flags=re.UNICODE)  # ✅ Match all emojis
     return emoji_pattern.sub("", text)  # ✅ Remove emojis
 
-# List of YouTube channels or playlists to download
-CHANNELS = [
-    # "https://www.youtube.com/@AETV",
-    "https://www.youtube.com/@BobbyBroccoli",
-    # "https://www.youtube.com/@CallMeKevin",
-    # "https://www.youtube.com/@CarbotAnimations",
-    # "https://www.youtube.com/@CartNarcs",
-    # "https://www.youtube.com/@ChatHistory",
-    # "https://www.youtube.com/@ClimateTown",
-    # "https://www.youtube.com/@ComedyCentral",
-    # "https://www.youtube.com/@CopsTV",
-    # "https://www.youtube.com/@DougDoug",
-    # "https://www.youtube.com/@dougdougdoug",
-    # "https://www.youtube.com/@dougdougdougdoug",
-    # "https://www.youtube.com/@ExploreWithUs",
-    # "https://www.youtube.com/@FormerlyBlue",
-    # "https://www.youtube.com/@FreeDocumentary",
-    # "https://www.youtube.com/@FreeDocumentaryNature",
-    # "https://www.youtube.com/@Funhaus",
-    # "https://www.youtube.com/@GameTheory",
-    # "https://www.youtube.com/@HistoryMatters",
-    # "https://www.youtube.com/@HorrorStories666",
-    # "https://www.youtube.com/@IronPineapple",
-    # "https://www.youtube.com/@JCS",
-    # "https://www.youtube.com/@JaboodyDubs",
-    # "https://www.youtube.com/@LawAndCrime",
-    # "https://www.youtube.com/@LetsGameItOut",
-    # "https://www.youtube.com/@LilAggy",
-    # "https://www.youtube.com/@MrBallen",
-    # "https://www.youtube.com/@MrBallensMedicalfanedit",
-    # "https://www.youtube.com/@mrnightmare",
-    # "https://www.youtube.com/@NanoBaiter",
-    # "https://www.youtube.com/@NinjaWarrior",
-    # "https://www.youtube.com/@NotJustBikes",
-    # "https://www.youtube.com/@OverSimplified",
-    # "https://www.youtube.com/@RealCivilEngineerGaming",
-    # "https://www.youtube.com/@RealLifeLore",
-    # "https://www.youtube.com/@SamONellaAcademy",
-    # "https://www.youtube.com/@SethsBikeHacks",
-    # "https://www.youtube.com/@Shifter_Cycling",
-    # "https://www.youtube.com/@SparkDocs",
-    # "https://www.youtube.com/@Streetcraft",
-    # "https://www.youtube.com/@TheLaughingSimon",
-    # "https://www.youtube.com/@ToastedShoes",
-    # "https://www.youtube.com/@VivaLaDirtLeague",
-    # "https://www.youtube.com/@WartimeStories",
-    # "https://www.youtube.com/@astrumspace",
-    # "https://www.youtube.com/@distortion2",
-    # "https://www.youtube.com/@eli_handle_bwav",
-    # "https://www.youtube.com/@gcn",
-    # "https://www.youtube.com/@jayveeeee",
-    # "https://www.youtube.com/@kurzgesagt",
-    # "https://www.youtube.com/@lockpickinglawyer",
-    # "https://www.youtube.com/@mytruecrimenews",
-    # "https://www.youtube.com/@oddheader",
-    # "https://www.youtube.com/@reigarw",
-    # "https://www.youtube.com/@sciencechannel",
-    # "https://www.youtube.com/@streetscaping",
-    # "https://www.youtube.com/@timthelawnmowerman",
-    # "https://www.youtube.com/@tosh",
-    # "https://www.youtube.com/@toshshow"
-]
+# Load config file
+CONFIG_FILE = "config.json"
 
-# Define file paths
-DOWNLOAD_PATH = 
-DOWNLOAD_ARCHIVE = 
-CACHE_FILE = 
-BASE_DIRECTORY = 
+with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+# Extract paths
+STAGING_DIRECTORY = config["staging_directory"]
+PLEX_DIRECTORY = config["plex_directory"]
+DOWNLOAD_ARCHIVE = config["download_archive"]
+CACHE_FILE = config["cache_file"]
+
+# Load only enabled channels
+CHANNELS = [channel["url"] for channel in config["channels"] if channel["enabled"]]
+
+logging.info(f"📺 Enabled YouTube Channels: {len(CHANNELS)}")
+for channel in CHANNELS:
+    logging.info(f" - {channel}")
+
+# Use values from config.json
+DOWNLOAD_PATH = os.path.join(STAGING_DIRECTORY, "%(uploader)s", "%(uploader)s - %(title)s.%(ext)s")
 
 # yt-dlp options
 YTDLP_OPTIONS = [
@@ -113,7 +67,8 @@ YTDLP_OPTIONS = [
     "--limit-rate", "2M",
     "--retries", "10",
     "--download-archive", DOWNLOAD_ARCHIVE,
-    "--sponsorblock-remove", "sponsor,selfpromo,intro,outro"
+    "--sponsorblock-remove", "sponsor,selfpromo,intro,outro",
+    "--print-traffic",
 ]
 
 # ✅ Ensure only one log per directory
@@ -273,7 +228,7 @@ def download_oldest_videos():
 
     for video in sorted_videos:
         sanitized_title = sanitize_filename(video["title"])
-        uploader_folder = os.path.join(BASE_DIRECTORY, video.get("uploader", "UnknownUploader"))
+        uploader_folder = os.path.join(STAGING_DIRECTORY, video.get("uploader", "UnknownUploader"))
         video_path = os.path.join(uploader_folder, f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
 
         # ✅ Print the folder contents ONCE per session
@@ -283,7 +238,7 @@ def download_oldest_videos():
                 logging.info(f" - {filename}")
             printed_folders.add(uploader_folder)
 
-        # ✅ Check if the file already exists
+        # ✅ Check if the file already exists in STAGING
         if os.path.exists(video_path):
             logging.info(f"✅ File already exists: {video_path}")
 
@@ -296,46 +251,127 @@ def download_oldest_videos():
                     apply_upload_dates(video_path, upload_date)
                 else:
                     logging.info(f"✅ Metadata already embedded. Skipping metadata processing.")
-                
-                continue  # ✅ Skip to the next video since it's already downloaded
-            
+                           
             except ValueError as e:
                 logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
                 continue  # ✅ Skip to the next video if metadata is invalid
 
-        # ✅ If file does NOT exist, download it
-        logging.info(f"📥 Downloading: {video['title']} ({video['upload_date']})")
-        command = YTDLP_OPTIONS + [video["url"]]
+            # # ✅ Move file to Plex directory if processing is done
+            # final_uploader_folder = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"))
+            # final_video_path = os.path.join(final_uploader_folder, f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
+            
+            # # ✅ If the file is already in Plex, log it and skip moving
+            # if os.path.exists(final_video_path):
+                # logging.info(f"🔍 File already exists in PLEX: {final_video_path}")
+                # continue  # ✅ Skip moving this file
 
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        already_in_archive = False  # ✅ Track if yt-dlp reports archive message
+            # if not os.path.exists(final_uploader_folder):
+                # os.makedirs(final_uploader_folder)  # ✅ Create folder if needed
 
-        for line in process.stdout:
-            line = line.strip()
-            if not line or any(skip in line for skip in ["[download]", "[ffmpeg]"]):
-                continue  # ✅ Ignore empty lines and irrelevant yt-dlp output
-            if "has already been recorded in the archive" in line:
-                already_in_archive = True
-            if "Downloading" in line or "Merging formats into" in line:
-                logging.info(line)  # ✅ Only log important messages
+            # try:
+                # shutil.move(video_path, final_video_path)
+                # logging.info(f"✅ Successfully moved to PLEX: {final_video_path}")
+            # except Exception as e:
+                # logging.error(f"⚠️ Failed to move {video_path} to PLEX directory: {e}")
+                # continue  # ✅ Skip if move fails
 
-        process.wait()
+            # continue  # ✅ Skip to next video since it's already processed
+        else:
+            # ✅ Check both staging and Plex directories first
+            final_video_path = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"),
+                                            f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
+            video_path = os.path.join(STAGING_DIRECTORY, video.get("uploader", "UnknownUploader"),
+                                      f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
 
-        if process.returncode != 0:
-            logging.error(f"⚠️ Download failed for {video['title']} with exit code {process.returncode}")
-            continue  # ✅ Skip to the next video if yt-dlp fails
+            file_in_staging = os.path.exists(video_path)
+            file_in_plex = os.path.exists(final_video_path)
 
-        if not os.path.exists(video_path):
-            logging.error(f"⚠️ File missing after download: {video_path}")
-            continue  # ✅ Skip if yt-dlp reported success but the file still isn't there
+            # ✅ Skip download if the file already exists in either location
+            if file_in_staging or file_in_plex:
+                logging.info(f"✅ File already exists, skipping download: {final_video_path if file_in_plex else video_path}")
+                continue  # ✅ Skip this video
 
-        # ✅ Embed metadata after downloading
+            # ✅ If file does NOT exist, THEN log "Downloading..."
+            logging.info(f"📥 Downloading to STAGING: {video['title']} ({video['upload_date']})")
+            
+            # ✅ Define the yt-dlp command before calling subprocess
+            command = YTDLP_OPTIONS + [video["url"]]
+            
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            already_in_archive = False  # ✅ Track if yt-dlp reports archive message
+
+            for line in process.stdout:
+                line = line.strip()
+                if not line or any(skip in line for skip in ["[download]", "[ffmpeg]"]):
+                    continue  # ✅ Ignore empty lines and irrelevant yt-dlp output
+                if "has already been recorded in the archive" in line:
+                    already_in_archive = True
+                if "Downloading" in line or "Merging formats into" in line:
+                    logging.info(line)  # ✅ Only log important messages
+
+            process.wait()
+
+            if process.returncode != 0:
+                logging.error(f"⚠️ Download failed for {video['title']} with exit code {process.returncode}")
+                continue  # ✅ Skip to the next video if yt-dlp fails
+
+            logging.info(f"🛠 Checking if file exists at: {video_path}")
+
+            # if not os.path.exists(video_path):
+                # if already_in_archive:
+                    # logging.info(f"🔄 File already in archive, skipping download: {video_path}")
+                # else:
+                    # logging.error(f"⚠️ Expected file missing after download: {video_path}")
+                # continue  # ✅ Skip if yt-dlp reported success but the file still isn't there
+
+            # ✅ Check both staging and final destination before assuming it's missing
+            final_video_path = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"),
+                                            f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
+
+            # ✅ Check if the file exists in either staging or Plex
+            file_in_staging = os.path.exists(video_path)
+            file_in_plex = os.path.exists(final_video_path)
+
+            # ✅ Check if the file exists in either Staging or Plex, and only log necessary messages
+            if file_in_plex:
+                logging.info(f"🔍 File already exists in PLEX: {final_video_path}")
+                continue  # ✅ No need to check further if it's already in Plex
+
+            if not file_in_staging:
+                logging.error(f"⚠️ Expected file missing: {video_path} - Not found in staging or Plex.")
+                continue  # ✅ Skip to next video if truly missing
+
+            # ✅ Embed metadata after downloading
+            try:
+                upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
+                apply_upload_dates(video_path, upload_date)
+            except ValueError as e:
+                logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
+                continue  # ✅ Skip if the upload date is invalid
+
+        # ✅ Move file to Plex **AFTER metadata is processed**
+        final_uploader_folder = os.path.join(PLEX_DIRECTORY, video.get("uploader", "UnknownUploader"))
+        final_video_path = os.path.join(final_uploader_folder, f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}.mp4")
+
+        # ✅ If the file is already in Plex, log it and skip moving
+        if os.path.exists(final_video_path):
+            logging.info(f"🔍 File already exists in PLEX: {final_video_path}")
+            continue  # ✅ Skip moving this file
+
+        if not os.path.exists(final_uploader_folder):
+            os.makedirs(final_uploader_folder)  # ✅ Create folder if needed
+
         try:
-            upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
-            apply_upload_dates(video_path, upload_date)
-        except ValueError as e:
-            logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
-            continue  # ✅ Skip if the upload date is invalid
+            # ✅ Move all associated files (mp4, jpg, etc.)
+            for file in os.listdir(uploader_folder):
+                if file.startswith(f"{video.get('uploader', 'UnknownUploader')} - {sanitized_title}"):
+                    file_path = os.path.join(uploader_folder, file)
+                    destination_path = os.path.join(final_uploader_folder, file)
+                    shutil.move(file_path, destination_path)
+                    logging.info(f"✅ Moved {file} to PLEX: {destination_path}")
+        except Exception as e:
+            logging.error(f"⚠️ Failed to move {video_path} to PLEX directory: {e}")
+            continue  # ✅ Skip if move fails
 
         # ✅ Skip sleep if yt-dlp reported "already in archive"
         if already_in_archive:
