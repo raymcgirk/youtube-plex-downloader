@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.4 - Real-Time Cache Updates & Logging Fixes (March 12, 2025)
+### Bug Fixes & Optimizations
+- Real-time cache updates: The script now saves each video immediately after processing, instead of waiting for the entire channel to finish.
+- Fixed a bug where all channels were processed before writing in blocks of 10. This caused unnecessary delays, especially for large channels with thousands of videos.
+- Improved logging for channels with no new videos: The script now explicitly logs a warning if a channel has no new videos to download, avoiding confusion about whether it was skipped or failed.
+- Increased crash resistance: If yt-dlp crashes or is interrupted, all videos up to that point are preserved in video_cache.json, preventing unnecessary re-fetching.
+### Notes
+- Writing every video immediately ensures no progress is lost if the script stops unexpectedly.
+- If disk write performance becomes an issue, future updates may introduce batched writes (e.g., every 10 videos).
+- The script is now fully crash-resistant and handles large channels more efficiently.
+
+---
+
 ## v1.3.3 - Incremental Cache Saves & Logging Improvements (March 12, 2025)
 ### Bug Fixes & Optimizations
 - Incremental cache updates: The script now saves the cache every 10 videos instead of waiting for the entire channel to be processed. This prevents data loss if the script crashes mid-fetch.
