@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.3.2 - Hotfix for New Channel Detection (March 12, 2025)
+### Bug Fixes
+- Fixed an issue where newly enabled channels were not being detected properly and did not fetch videos.
+- The script now correctly updates video_cache.json when a new channel is added, ensuring new videos are downloaded without affecting existing cached data.
+- Improved logging clarity for new channel fetching to ensure correct debugging and monitoring.
+### Notes
+- This is a hotfix to address a bug introduced in v1.3.1. No new features have been added.
+- The script now functions as expected when enabling additional channels and dynamically pulls new content.
+
+---
+
 ## v1.3.1 - Bug Fixes & Optimizations (March 12, 2025)
 
 ### Bug Fixes
