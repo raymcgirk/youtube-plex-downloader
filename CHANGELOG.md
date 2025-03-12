@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.3 - Incremental Cache Saves & Logging Improvements (March 12, 2025)
+### Bug Fixes & Optimizations
+- Incremental cache updates: The script now saves the cache every 10 videos instead of waiting for the entire channel to be processed. This prevents data loss if the script crashes mid-fetch.
+- Improved crash resilience: In the event of an error or interruption, the script now resumes from the last saved state, preventing unnecessary re-fetching of thousands of videos.
+- More accurate logging for missing videos: Instead of logging a critical error when no new videos are found, the script now issues a warning with clear messaging, distinguishing between an actual failure and an expected case where no new videos are available.
+- Final save per channel: Ensures that even if a channel has fewer than 10 videos, its progress is still committed to video_cache.json.
+
+### Notes
+- This update greatly improves efficiency for large channels with thousands of videos.
+- The new caching method ensures minimal progress loss in case of unexpected shutdowns.
+
+---
+
 ## v1.3.2 - Hotfix for New Channel Detection (March 12, 2025)
 ### Bug Fixes
 - Fixed an issue where newly enabled channels were not being detected properly and did not fetch videos.
