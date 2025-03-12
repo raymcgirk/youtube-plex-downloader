@@ -24,4 +24,50 @@ Ensure you have:
 - **yt-dlp** for YouTube downloads:
   ```sh
   pip install yt-dlp
-- ffmpeg for metadata embedding [Download](https://ffmpeg.org/download.html)
+ffmpeg for metadata embedding [Download](https://ffmpeg.org/download.html)
+
+---
+
+### **2️⃣ Clone the Repository
+    git clone https://github.com/YOUR_GITHUB_USERNAME/youtube-plex-downloader.git
+    cd youtube-plex-downloader
+---
+
+### **3️⃣ Set Up config.json
+Edit config.json to set up your file paths and YouTube channels:
+
+    {
+        "staging_directory": "PATH/TO/STAGING",
+        "plex_directory": "PATH/TO/PLEX",
+        "download_archive": "PATH/TO/DOWNLOAD_ARCHIVE",
+        "cache_file": "PATH/TO/CACHE_FILE",
+        "channels": [
+            {"url": "https://www.youtube.com/@BobbyBroccoli", "enabled": true},
+            {"url": "https://www.youtube.com/@Kurzgesagt", "enabled": false}
+        ]
+    }
+
+---
+
+### **4️⃣ Run the Script
+      python youtube_plex_downloader.py
+
+---
+
+## ⚠️ Important Notes
+- Modify config.json instead of editing the script directly.
+- Ensure config.json is not uploaded with personal paths.
+- Keep ffmpeg installed to embed metadata properly.
+- If a video already exists, it will be skipped automatically.
+
+---
+
+## 🎉 Credits
+Built by Shawn McCarthy
+Uses yt-dlp for downloading.
+Inspired by Plex automation workflows.
+
+---
+
+## 📜 License
+Licensed under the MIT License. See LICENSE for details.
