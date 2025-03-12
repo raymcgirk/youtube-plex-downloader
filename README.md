@@ -63,9 +63,9 @@ Edit config.json to set up your file paths and YouTube channels:
 ---
 
 ## 🎉 Credits
-Built by Shawn McCarthy
-Uses yt-dlp for downloading.
-Inspired by Plex automation workflows.
+- Built by Shawn McCarthy
+- Uses yt-dlp for downloading.
+- Inspired by Plex automation workflows.
 
 ---
 
