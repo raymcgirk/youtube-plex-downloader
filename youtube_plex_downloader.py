@@ -98,28 +98,41 @@ def load_cache():
     return {}
 
 def save_cache(cache):
-    """Save the video list cache."""
+    """Save the video list cache, keeping track of the latest download per channel."""
+    latest_video_dates = {}
+
+    for channel, videos in cache.items():
+        if isinstance(videos, list) and videos:  # Ensure we're handling lists
+            latest_video = max(v["upload_date"] for v in videos)
+            latest_video_dates[channel + "_latest"] = latest_video  # Store updates separately
+
+    # ✅ Now update the cache outside the loop
+    cache.update(latest_video_dates)
+
+    # ✅ Write to file
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=4)
 
 def get_all_videos():
-    """Fetch video metadata from YouTube and save it to cache."""
-    video_list = {}
+    """Fetch video metadata incrementally (only new videos)."""
+    video_list = load_cache()
 
     for channel in CHANNELS:
-        logging.info(f"📡 Fetching video list from: {channel}")
+        latest_known = video_list.get(channel + "_latest", "20000101")  # Default to old date if none exists
+        
+        logging.info(f"📡 Fetching new videos from {channel} (only after {latest_known})")
 
         try:
             result = subprocess.run(
-                ["yt-dlp", "--datebefore", "22000101", "--dump-json", channel],
+                ["yt-dlp", "--dateafter", latest_known, "--dump-json", channel],
                 capture_output=True, text=True, check=True
             )
 
-            channel_videos = []
+            new_videos = []
             for line in result.stdout.splitlines():
                 try:
                     video_data = json.loads(line)
-                    channel_videos.append({
+                    new_videos.append({
                         "title": video_data.get("title"),
                         "uploader": video_data.get("uploader", "UnknownUploader"),
                         "url": video_data.get("webpage_url"),
@@ -128,15 +141,17 @@ def get_all_videos():
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
                     logging.error(f"⚠️ Skipping malformed video entry: {e}")
 
-            video_list[channel] = channel_videos
+            if new_videos:
+                if channel not in video_list:
+                    video_list[channel] = []  # ✅ Ensure the channel key exists before appending
+                
+                video_list[channel].extend(new_videos)  # Add new videos to cache
+                logging.info(f"✅ Added {len(new_videos)} new videos for {channel}")
 
         except subprocess.CalledProcessError as e:
             logging.error(f"⚠️ Failed to fetch video list for {channel}: {e}")
 
-    # ✅ Save updated video list to cache
-    save_cache(video_list)
-
-    logging.info("✅ Video cache updated.")
+    save_cache(video_list)  # ✅ Save updated cache
     return video_list
 
 def has_existing_metadata(video_path, upload_date):
@@ -206,27 +221,60 @@ def apply_upload_dates(video_path, upload_date):
         logging.error(f"⚠️ Failed to embed metadata for {video_path}: {e}")
 
 def download_channel_thumbnail(channel_url, uploader):
-    """Downloads the YouTube channel's profile picture to staging, then moves it to Plex."""
+    """Downloads the YouTube channel's profile picture using the correct channel name."""
 
-    # Paths for staging and final Plex destination
-    staging_folder = os.path.join(STAGING_DIRECTORY, uploader.lstrip("@"))
-    plex_folder = os.path.join(PLEX_DIRECTORY, uploader.lstrip("@"))
+    logging.info(f"🔍 Checking for channel thumbnail for {uploader}...")
+
+    # ✅ Check if the thumbnail already exists in Plex **before** extracting channel name
+    plex_folder = os.path.join(PLEX_DIRECTORY, uploader)
+    plex_thumbnail_path = os.path.join(plex_folder, "folder.jpg")
+
+    if os.path.exists(plex_thumbnail_path):
+        logging.info(f"✅ Thumbnail already exists in Plex: {plex_thumbnail_path}. Skipping download.")
+        return  # ✅ Stop execution here
+
+    # ✅ Extract the actual channel name **only if downloading is necessary**
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--flat-playlist", "--print", "%(url)s", channel_url],
+            capture_output=True, text=True, check=True
+        )
+        video_urls = result.stdout.splitlines()
+        if not video_urls:
+            raise ValueError("No videos found on the channel!")
+
+        latest_video_url = video_urls[0]  # ✅ Take the most recent video
+
+        result = subprocess.run(
+            ["yt-dlp", "--print", "%(uploader)s", latest_video_url],
+            capture_output=True, text=True, check=True
+        )
+        channel_name = result.stdout.strip() or uploader  # ✅ Fallback to uploader if empty
+        logging.info(f"✅ Extracted channel name: {channel_name}")
+
+    except (subprocess.CalledProcessError, ValueError) as e:
+        logging.error(f"⚠️ Failed to extract channel name for {channel_url}: {e}")
+        channel_name = uploader  # ✅ Fallback to URL name if needed
+
+    # ✅ Use extracted channel name for folder paths
+    staging_folder = os.path.join(STAGING_DIRECTORY, channel_name)
+    plex_folder = os.path.join(PLEX_DIRECTORY, channel_name)
 
     os.makedirs(staging_folder, exist_ok=True)  # Ensure staging folder exists
     os.makedirs(plex_folder, exist_ok=True)  # Ensure Plex folder exists
 
+    logging.info(f"🔍 Downloading channel thumbnail for {channel_name}...")
+
     staging_thumbnail_path = os.path.join(staging_folder, "folder.jpg")
-    plex_thumbnail_path = os.path.join(plex_folder, "folder.jpg")
 
     try:
-        # ✅ Correct yt-dlp command to ONLY download the profile picture
         subprocess.run([
             "yt-dlp",
-            "--write-thumbnail",   # ✅ Forces yt-dlp to download only the thumbnail
-            "--skip-download",     # ✅ Prevents any videos from being downloaded
-            "--convert-thumbnails", "jpg",  # ✅ Ensures the output is a JPG
-            "--playlist-items", "0",  # ✅ Forces yt-dlp to avoid downloading videos
-            "-o", os.path.join(staging_folder, "folder"),  # ✅ Ensures correct save path
+            "--write-thumbnail",
+            "--skip-download",
+            "--convert-thumbnails", "jpg",
+            "--playlist-items", "0",
+            "-o", os.path.join(staging_folder, "folder"),
             channel_url
         ], check=True)
 
@@ -237,7 +285,7 @@ def download_channel_thumbnail(channel_url, uploader):
         logging.info(f"✅ Moved thumbnail to Plex: {plex_thumbnail_path}")
 
     except subprocess.CalledProcessError as e:
-        logging.error(f"⚠️ yt-dlp failed for {uploader}: {e}")
+        logging.error(f"⚠️ yt-dlp failed for {channel_name}: {e}")
     except FileNotFoundError:
         logging.error(f"⚠️ Thumbnail file not found in staging: {staging_thumbnail_path}")
     except Exception as e:
@@ -249,26 +297,36 @@ def download_oldest_videos():
 
     videos = load_cache()
 
-    # ✅ If the cache is empty, fetch new video metadata
-    if not videos:
-        logging.info("⚠️ No cached videos found. Fetching video metadata...")
-        videos = get_all_videos()
+    # ✅ Check if any new channels are missing from the cache and update
+    missing_channels = [channel for channel in CHANNELS if channel not in videos]
+    if missing_channels:
+        logging.info(f"🔄 Fetching video metadata for new channels: {missing_channels}")
+        videos = get_all_videos()  # ✅ Force an update to the cache
 
     if not videos:
         logging.info("⚠️ Still no videos found after fetching. Exiting.")
         return
-
+        
     # ✅ Now we download thumbnails—after confirming video metadata.
     for channel in CHANNELS:
         uploader = channel.split("/")[-1].lstrip("@")  # Remove '@' if present
-        logging.info(f"🔍 Downloading channel thumbnail for {uploader}...")
         download_channel_thumbnail(channel, uploader)
 
     # ✅ Ensure videos are sorted by upload_date
     sorted_videos = []
     for channel, video_list in videos.items():
-        sorted_videos.extend(video_list)
-    sorted_videos.sort(key=lambda v: v["upload_date"])
+        if "_latest" in channel:  # ✅ Skip _latest tracking keys
+            continue
+        if isinstance(video_list, list):  # ✅ Ensure it's a list
+            sorted_videos.extend(video_list)
+        else:
+            logging.error(f"⚠️ Invalid data format for channel {channel}: Expected a list, got {type(video_list)}")
+
+    # ✅ Ensure all items in sorted_videos are dictionaries
+    sorted_videos = [v for v in sorted_videos if isinstance(v, dict)]
+
+    # ✅ Check if upload_date exists before sorting
+    sorted_videos.sort(key=lambda v: v.get("upload_date", "9999-12-31T23:59:59"))  # Default to far-future date if missing
 
     for video in sorted_videos:
         sanitized_title = sanitize_filename(video["title"])
