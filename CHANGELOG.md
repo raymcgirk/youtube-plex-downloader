@@ -1,5 +1,27 @@
 # Changelog
 
+## V1.3.5 - Stability & Major Bug Fixes  (March 12, 2025) 
+### Critical Fixes
+Fixed _latest Setting Too Early, Causing Skipped Videos
+- Issue: _latest was being set as soon as caching started, meaning if the script was interrupted, it would skip videos on the next run.
+- Fix: Introduced _in_progress, which tracks the last processed video.
+ - _latest is only updated when all videos are cached, ensuring the script never skips videos after an interruption.
+ - This means no more deleting video_cache.json due to bad _latest values—progress is always saved correctly.
+### yt-dlp Enhancements
+Prevented Hanging on Member-Only & Live Videos
+- Issue: The script would get stuck on member-only videos, requiring manual intervention.
+- Fix: Updated yt-dlp to automatically skip member-only and live videos using:
+
+      --match-filter "!is_live & availability!=needs_auth"
+  - Now, restricted videos are ignored completely, preventing unnecessary stalls.
+  - No more manual intervention needed—the script runs cleanly from start to finish.
+### Expected Behavior After Fixes
+-  Caching now correctly tracks progress and resumes safely.
+-  _latest is only updated when all videos have been cached, eliminating bad cutoff dates.
+-  Member-only & live videos are automatically skipped, preventing script hangs.
+
+---
+
 ## v1.3.4 - Real-Time Cache Updates & Logging Fixes (March 12, 2025)
 ### Bug Fixes & Optimizations
 - Real-time cache updates: The script now saves each video immediately after processing, instead of waiting for the entire channel to finish.
@@ -76,7 +98,7 @@
 ---
 
 ## v1.2.1 - Hotfix (March 2025)
--  Added `config.json` (forgot in v1.2.0 🤦).
+-  Added `config.json` (forgot in v1.2.0).
 -  Updated documentation to clarify setup.
 
 ---
