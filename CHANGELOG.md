@@ -15,10 +15,20 @@ Prevented Hanging on Member-Only & Live Videos
       --match-filter "!is_live & availability!=needs_auth"
   - Now, restricted videos are ignored completely, preventing unnecessary stalls.
   - No more manual intervention needed—the script runs cleanly from start to finish.
+### Updated Timeout Handling for Stuck Videos
+- Fixed an issue where yt-dlp could hang indefinitely on some videos.
+- Now waits up to 60 seconds for a response before assuming a video is stuck.
+- If no output for 60 seconds, the script:
+ - Retries once.
+ - If it hangs again, it skips the video and moves on.
+- Logs the exact video title & URL when skipping, so stuck videos can be reviewed manually.
 ### Expected Behavior After Fixes
 -  Caching now correctly tracks progress and resumes safely.
 -  _latest is only updated when all videos have been cached, eliminating bad cutoff dates.
 -  Member-only & live videos are automatically skipped, preventing script hangs.
+-  Valid slow videos still process correctly.
+-  Truly stuck videos no longer block the script indefinitely.
+-  If a video gets skipped, it’s logged with its title & URL for review.
 
 ---
 
