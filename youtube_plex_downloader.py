@@ -69,6 +69,7 @@ YTDLP_OPTIONS = [
     "--download-archive", DOWNLOAD_ARCHIVE,
     "--sponsorblock-remove", "sponsor,selfpromo,intro,outro",
     "--print-traffic",
+    "--match-filter", "!is_live & availability!=needs_auth"  # ✅ Skips member-only & live videos
 ]
 
 # ✅ Ensure only one log per directory
@@ -97,78 +98,98 @@ def load_cache():
             return json.load(f)
     return {}
 
-def save_cache(cache):
-    """Save the video list cache, keeping track of the latest download per channel."""
-    latest_video_dates = {}
+def save_cache(cache, last_processed_video=None, channel=None, finalize=False):
+    """Save the video list cache, ensuring `_latest` correctly tracks the newest video."""
+    if last_processed_video and channel:
+        cache[channel + "_in_progress"] = last_processed_video["upload_date"]  # ✅ Track progress safely
 
-    for channel, videos in cache.items():
-        if isinstance(videos, list) and videos:  # Ensure we're handling lists
-            latest_video = max(v["upload_date"] for v in videos)
-            latest_video_dates[channel + "_latest"] = latest_video  # Store updates separately
+    if finalize and channel:
+        # ✅ Ensure `_latest` is set to the most recent (newest) video
+        if channel in cache and isinstance(cache[channel], list):
+            newest_video = max(cache[channel], key=lambda v: v["upload_date"], default=None)
+            if newest_video:
+                cache[channel + "_latest"] = newest_video["upload_date"]
+        
+        # ✅ Remove temporary `_in_progress`
+        cache.pop(channel + "_in_progress", None)
 
-    # ✅ Now update the cache outside the loop
-    cache.update(latest_video_dates)
-
-    # ✅ Write to file
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=4)
 
 def get_all_videos():
-    """Fetch video metadata in real-time and save immediately to avoid long delays."""
+    """Fetch video metadata while handling stuck videos intelligently."""
     video_list = load_cache()
 
     for channel in CHANNELS:
-        latest_known = video_list.get(channel + "_latest", "20000101")  # Default if none exists
+        latest_known = video_list.get(channel + "_latest", "20000101")
         logging.info(f"📡 Fetching new videos from {channel} (only after {latest_known})")
 
-        new_video_count = 0  # ✅ Track how many new videos are added
+        last_processed_video = None
+        current_video_title = None  # ✅ Track the video being processed
 
         try:
             process = subprocess.Popen(
                 ["yt-dlp", "--dateafter", latest_known, "--dump-json", channel],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1  # ✅ Process lines one-by-one instead of waiting for full output
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
             )
+
+            last_activity = time.time()  # ✅ Track last response time
+            retry_attempted = False  # ✅ Only retry once
 
             for line in process.stdout:
                 line = line.strip()
-                if not line:
-                    continue  # Skip empty lines
+                if line:
+                    last_activity = time.time()  # ✅ Reset timer when activity happens
 
                 try:
                     video_data = json.loads(line)
+
+                    # ✅ Track the current video title for better debugging
+                    current_video_title = video_data.get("title", "Unknown Title")
+                    current_video_url = video_data.get("webpage_url", "Unknown URL")
+
+                    # ✅ Skip member-only videos
+                    if video_data.get("availability") == "needs_auth":
+                        logging.warning(f"⚠️ Skipping member-only video: {current_video_title} ({current_video_url})")
+                        continue  
+
                     video_entry = {
-                        "title": video_data.get("title"),
+                        "title": current_video_title,
                         "uploader": video_data.get("uploader", "UnknownUploader"),
-                        "url": video_data.get("webpage_url"),
+                        "url": current_video_url,
                         "upload_date": datetime.strptime(video_data.get("upload_date"), "%Y%m%d").isoformat()
                     }
 
-                    # ✅ Save each video immediately as it's processed
                     if channel not in video_list:
                         video_list[channel] = []
-                    video_list[channel].append(video_entry)
-                    save_cache(video_list)
 
-                    new_video_count += 1
-                    logging.info(f"✅ Saved video to cache: {video_entry['title']} ({video_entry['upload_date']})")
+                    video_list[channel].append(video_entry)
+                    last_processed_video = video_entry
+
+                    save_cache(video_list, last_processed_video, channel)
+
+                    logging.info(f"✅ Saved video to cache: {current_video_title} ({video_entry['upload_date']})")
 
                 except (json.JSONDecodeError, ValueError, TypeError) as e:
                     logging.error(f"⚠️ Skipping malformed video entry: {e}")
 
-            process.wait()  # Ensure yt-dlp fully completes before moving to next channel
+                # ✅ If no output for 60 seconds, assume stuck
+                if time.time() - last_activity > 60:
+                    if not retry_attempted:
+                        logging.warning(f"⏳ No response for 60s while processing: {current_video_title} ({current_video_url}). Retrying once...")
+                        retry_attempted = True
+                        last_activity = time.time()  # Reset timer and try again
+                    else:
+                        logging.error(f"❌ Stuck on video: {current_video_title} ({current_video_url}). Skipping...")
+                        process.kill()
+                        break  
 
-            # ✅ If no new videos were found, log a warning
-            if new_video_count == 0:
-                logging.warning(f"⚠️ No new videos found for {channel} (nothing to download).")
+            process.wait()
+
+            save_cache(video_list, last_processed_video, channel, finalize=True)  # ✅ Finalize cache
 
         except subprocess.CalledProcessError as e:
-            if e.returncode == 2:
-                logging.warning(f"⚠️ No new videos found for {channel} (or channel is inaccessible).")
-            else:
-                logging.error(f"⚠️ Failed to fetch video list for {channel}: {e}")
+            logging.error(f"⚠️ Error fetching videos from {channel}: {e}")
 
     return video_list
 
