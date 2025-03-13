@@ -1,0 +1,11 @@
+{
+    "staging_directory": "PATH/TO/STAGING",
+    "plex_directory": "PATH/TO/PLEX",
+    "download_archive": "PATH/TO/DOWNLOAD_ARCHIVE",
+    "cache_file": "PATH/TO/CACHE_FILE",
+    "channels": [
+        {"url": "https://www.youtube.com/@BobbyBroccoli", "enabled": true},
+        {"url": "https://www.youtube.com/@Kurzgesagt", "enabled": false},
+        {"url": "https://www.youtube.com/@RealLifeLore", "enabled": false}
+    ]
+}

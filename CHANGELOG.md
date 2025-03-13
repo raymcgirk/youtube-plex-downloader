@@ -1,5 +1,32 @@
 # Changelog
 
+### **v2.0.0 - Major Update**
+
+#### **New Features:**
+- **Reworked caching system** to prevent duplicate processing and improve efficiency.
+- **SQLite-based tracking** of last downloaded videos per channel.
+- **Batch processing for metadata caching** to reduce file I/O and improve speed.
+- **Parallelized metadata fetching** to process multiple channels at the same time.
+- **Converted from a single large `python` script into a modular system** with separate `.py` files for clarity and better file management.
+
+#### **Improvements:**
+- **Reduced redundant API calls** by skipping already cached videos.
+- **Enhanced logging** to better debug yt-dlp command execution.
+- **Refactored `fetcher.py` and `cache.py`** for scalability.
+- **Better Git integration** with `.gitignore` updates to exclude sensitive files.
+
+#### **Fixes:**
+- **Resolved issue where certain channels were skipped due to caching bugs.**
+- **Fixed `yt-dlp` authentication issues** by ensuring proper cookie management.
+- **Prevented unnecessary full cache rewrites** to improve performance.
+
+#### **Breaking Changes:**
+- `video_cache.json` structure has changed; existing users may need to clear it.
+- SQLite is now required for tracking previously downloaded videos.
+- Users must provide fresh browser cookies when running on a new machine.
+
+---
+
 ## V1.3.5 - Stability & Major Bug Fixes  (March 12, 2025) 
 ### Critical Fixes
 Fixed _latest Setting Too Early, Causing Skipped Videos

@@ -1,7 +1,16 @@
 # Ignore private config files
-config.json
+config/config.json
 
 # Ignore Python cache & virtual environments
 __pycache__/
 *.pyc
 .venv/
+
+# Ignore cache and sensitive files
+cookies.txt
+video_cache.json
+video_tracking.db
+
+# Ignore logs
+logs/
+*.log
