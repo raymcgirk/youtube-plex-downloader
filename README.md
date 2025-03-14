@@ -11,12 +11,13 @@ The **YouTube to Plex Downloader** is a Python-based tool that automates the pro
 - **Batch processing for metadata caching** to reduce file I/O and improve speed.
 - **Parallelized metadata fetching** to process multiple channels at the same time.
 - **Converted from a single large `python` script into a modular system** with separate `.py` files for clarity and better file management.
+- **Added automatic log purging to remove old logs and prevent unnecessary storage buildup.**
 
 ### **Improvements:**
 - **Reduced redundant API calls** by skipping already cached videos.
 - **Enhanced logging** to better debug yt-dlp command execution.
 - **Refactored `fetcher.py` and `cache.py`** for scalability.
-- **Better Git integration** with `.gitignore` updates to exclude sensitive files.
+- **Logs now auto-delete after 30 days, reducing clutter and improving long-term efficiency.**
 
 ### **Fixes:**
 - **Resolved issue where certain channels were skipped due to caching bugs.**
