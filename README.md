@@ -1,33 +1,42 @@
-# YouTube to Plex Downloader v2.0.0 🚀
+# YouTube to Plex Downloader v2.0.1 🚀
 
 ## **Introduction**
-The **YouTube to Plex Downloader** is a Python-based tool that automates the process of fetching metadata and downloading YouTube videos, organizing them for Plex compatibility. This version, **v2.0.0**, introduces significant improvements in caching, efficiency, and modularity.
+The **YouTube to Plex Downloader** is a Python-based tool that automates the process of fetching metadata and downloading YouTube videos, organizing them for Plex compatibility. This version, **v2.0.1**, introduces significant improvements in caching, efficiency, and modularity.
 
-## **What's New in v2.0.0?**
+## **What's New in v2.0.1?**
 
 ### **Major Updates:**
-- **Reworked caching system** to prevent duplicate processing and improve efficiency.
-- **SQLite-based tracking** of last downloaded videos per channel.
-- **Batch processing for metadata caching** to reduce file I/O and improve speed.
-- **Parallelized metadata fetching** to process multiple channels at the same time.
-- **Converted from a single large `python` script into a modular system** with separate `.py` files for clarity and better file management.
-- **Added automatic log purging to remove old logs and prevent unnecessary storage buildup.**
+- **Reworked Fetching & Processing:**
+  - Videos are now processed **one at a time** instead of batch-fetching metadata.
+  - Prevents YouTube rate-limiting and reduces the risk of getting blocked.
 
-### **Improvements:**
-- **Reduced redundant API calls** by skipping already cached videos.
-- **Enhanced logging** to better debug yt-dlp command execution.
-- **Refactored `fetcher.py` and `cache.py`** for scalability.
-- **Logs now auto-delete after 30 days, reducing clutter and improving long-term efficiency.**
+- **Resumable Downloads Enabled:**
+  - Removed `--no-part`, so interrupted downloads now resume from the last completed part.
+  - Videos no longer restart from 0% if the download is interrupted.
+
+- **Increased Download Speed:**
+  - **Boosted from 2MB/s → 5MB/s** (150% faster) while avoiding rate limits.
+
+- **Improved File Movement & Cleanup:**
+  - **Fixed colon (`:`) issues** in filenames using `sanitize_filename()`.
+  - **Thumbnails (`.jpg`) are now deleted automatically** after embedding metadata.
+  - **Files now move correctly to Plex**, ensuring proper organization.
+
+- **Enhanced Logging System:**
+  - Added **separate logging for `yt-dlp`** in `logs/yt-dlp-debug_YYYY-MM-DD.log`.
+  - **Old logs (30+ days) are automatically purged**, preventing clutter.
+  - **Increased visibility of file movement & metadata embedding.**
 
 ### **Fixes:**
-- **Resolved issue where certain channels were skipped due to caching bugs.**
-- **Fixed `yt-dlp` authentication issues** by ensuring proper cookie management.
-- **Prevented unnecessary full cache rewrites** to improve performance.
+- **Resolved issue where certain videos were not detected as downloaded.**
+- **Fixed script failing to move files after download.**
+- **Fixed unnecessary sleep timer when videos were already downloaded.**
+- **Prevented yt-dlp’s filename changes from breaking Plex organization.**
+- **Ensured Plex folder paths are set up correctly to avoid missing files.**
 
 ### **Breaking Changes:**
-- `video_cache.json` structure has changed; existing users may need to clear it.
-- SQLite is now required for tracking previously downloaded videos.
-- Users must provide fresh browser cookies when running on a new machine.
+- **Removed SQLite dependency**; all metadata is now stored in `video_cache.json`.
+- **Fetching logic changed** to prevent YouTube from blocking requests.
 
 ---
 
@@ -36,7 +45,6 @@ The **YouTube to Plex Downloader** is a Python-based tool that automates the pro
 Ensure you have the following installed:
 - **Python 3.8+** (Recommended: Python 3.10+)
 - **yt-dlp** (for video metadata and downloads)
-- **SQLite** (for video tracking)
 - **FFmpeg** (for video processing if needed)
 - **pip packages:** `pip install -r requirements.txt`
 
@@ -76,13 +84,13 @@ This will download the videos based on cached metadata.
 ## **How It Works**
 1. **Metadata Fetching (`fetcher.py`)**
    - Retrieves video metadata from each channel.
-   - Caches results in `video_cache.json` (short-term) and `video_tracking.db` (long-term tracking).
-   - Uses parallel processing to speed up metadata collection.
+   - Caches results exclusively in `video_cache.json` (SQLite removed).
+   - Processes videos one at a time to prevent YouTube rate limits.
    
 2. **Video Downloading (`downloader.py`)**
    - Downloads videos **oldest to newest** based on cached metadata.
    - Once a channel is fully downloaded, it only fetches new videos.
-   - Uses SQLite to track previously downloaded content, avoiding duplicate downloads.
+   - Automatically embeds metadata and moves files to Plex.
 
 ---
 
@@ -105,4 +113,4 @@ We welcome contributions! Feel free to submit pull requests or open issues on Gi
 This project is licensed under the MIT License.
 
 ## **Acknowledgments**
-Special thanks to all contributors and testers who helped make **v2.0.0** a major upgrade! 🎉
+Special thanks to all contributors and testers who helped make **v2.0.1** a major upgrade! 🎉

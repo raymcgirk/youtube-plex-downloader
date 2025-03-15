@@ -22,4 +22,5 @@ logs/
 # Ignore output folders and files
 downloads/
 downloaded.txt
+dist/
 *.zip
