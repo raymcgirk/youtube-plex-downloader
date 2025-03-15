@@ -10,7 +10,14 @@ __pycache__/
 cookies.txt
 video_cache.json
 video_tracking.db
+order_of_operations.txt
+bugs.txt
+feature_ideas.txt
 
 # Ignore logs
 logs/
 *.log
+
+# Ignore output folders and files
+downloads/
+downloaded.txt

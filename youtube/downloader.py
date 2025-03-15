@@ -1,26 +1,20 @@
-import subprocess
 import os
-import random
+import re
 import time
 import logging
-import shutil
-from datetime import datetime
-
-from utils.sanitizer import sanitize_filename
-from plex.embedder import apply_upload_dates, has_existing_metadata
-from utils.cache import load_cache
+import subprocess
+from tqdm import tqdm
 from config.loader import load_config
-from youtube.utils import update_yt_dlp
-from youtube.fetcher import get_all_videos
-from utils.thumbnails import download_channel_thumbnail
+from logger.logger import get_yt_dlp_log_path, cleanup_old_logs
 
 config = load_config()
 
 STAGING_DIRECTORY = config["staging_directory"]
 PLEX_DIRECTORY = config["plex_directory"]
-DOWNLOAD_ARCHIVE = config["download_archive"]
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))  # Get root project directory
+MAIN_DIRECTORY = os.path.dirname(PROJECT_ROOT)
+DOWNLOAD_ARCHIVE = os.path.join(MAIN_DIRECTORY, "downloaded.txt")
 CACHE_FILE = config["cache_file"]
-CHANNELS = [channel["url"] for channel in config["channels"] if channel["enabled"]]
 
 DOWNLOAD_PATH = os.path.join(STAGING_DIRECTORY, "%(uploader)s", "%(uploader)s - %(title)s.%(ext)s")
 
@@ -30,13 +24,13 @@ YTDLP_OPTIONS = [
     "-o", DOWNLOAD_PATH,
     "--merge-output-format", "mp4",
     "--remux-video", "mp4",
-    "--no-part",
     "--force-overwrites",
     "--write-thumbnail",
     "--convert-thumbnails", "jpg",
     "--embed-metadata",
     "--embed-thumbnail",
-    "--limit-rate", "2M",
+    "--rm-cache-dir",
+    "--limit-rate", "5M",
     "--retries", "10",
     "--download-archive", DOWNLOAD_ARCHIVE,
     "--sponsorblock-remove", "sponsor,selfpromo,intro,outro",
@@ -44,131 +38,88 @@ YTDLP_OPTIONS = [
     "--match-filter", "!is_live & availability!=needs_auth & !is_short"
 ]
 
-printed_folders = set()
 
-def download_oldest_videos():
-    update_yt_dlp()
+def is_video_downloaded(video_url):
+    """Checks if the video is already recorded in yt-dlp's download archive by matching only the video ID."""
+    if not os.path.exists(DOWNLOAD_ARCHIVE):
+        logging.info(f"⚠ Archive file not found: {DOWNLOAD_ARCHIVE}")
+        return False  # Archive file doesn't exist yet
 
-    videos = load_cache(CACHE_FILE)
+    video_id = video_url.split("v=")[-1]  # ✅ Extract only the video ID from full URL
 
-    missing_channels = [channel for channel in CHANNELS if channel not in videos]
-    if missing_channels:
-        logging.info(f"🔄 Fetching video metadata for new channels: {missing_channels}")
-        videos = get_all_videos()
+    logging.debug(f"DEBUG: Checking if video ID '{video_id}' is in {DOWNLOAD_ARCHIVE}")
 
-    if not videos:
-        logging.info("⚠️ Still no videos found after fetching. Exiting.")
-        return
+    with open(DOWNLOAD_ARCHIVE, "r") as archive_file:
+        for line in archive_file:
+            if video_id.strip() in line.strip():  # ✅ Now we correctly check for the video ID
+                logging.info(f"✅ Already downloaded: {video_url}, skipping.")
+                return True  # ✅ Video was already downloaded
 
-    for channel in CHANNELS:
-        uploader = channel.split("/")[-1].lstrip("@")
-        download_channel_thumbnail(channel, uploader)
+    logging.debug(f"DEBUG: Video ID '{video_id}' NOT found in archive!")
+    return False  # ❌ Not found in archive
 
-    sorted_videos = []
-    for channel, video_list in videos.items():
-        if "_latest" in channel:
-            continue
-        if isinstance(video_list, list):
-            sorted_videos.extend(video_list)
-        else:
-            logging.error(f"⚠️ Invalid data format for channel {channel}: {type(video_list)}")
+def download_video(video_url):
+    """Downloads a specific video using yt-dlp and returns True if downloaded, False if skipped"""
 
-    sorted_videos = [v for v in sorted_videos if isinstance(v, dict)]
-    sorted_videos.sort(key=lambda v: v.get("upload_date", "9999-12-31T23:59:59"))
+    # ✅ Step 1: Check if the video is in the archive BEFORE calling yt-dlp
+    if is_video_downloaded(video_url):
+        return False  # ✅ Skip the video immediately
 
-    for video in sorted_videos:
-        sanitized_title = sanitize_filename(video["title"])
-        uploader = video.get("uploader", "UnknownUploader")
+    command = YTDLP_OPTIONS + [video_url]
+    yt_dlp_log_filename = get_yt_dlp_log_path()
+    download_started = False
 
-        uploader_folder = os.path.join(STAGING_DIRECTORY, uploader)
-        video_path = os.path.join(uploader_folder, f"{uploader} - {sanitized_title}.mp4")
+    log_directory = os.path.dirname(yt_dlp_log_filename)
+    os.makedirs(log_directory, exist_ok=True)  # ✅ Ensure logs directory exists
+    open(yt_dlp_log_filename, "w").close()  # ✅ Create an empty log file
 
-        if uploader_folder not in printed_folders and os.path.exists(uploader_folder):
-            logging.info(f"\n📂 Files in {uploader_folder}:")
-            for filename in os.listdir(uploader_folder):
-                logging.info(f" - {filename}")
-            printed_folders.add(uploader_folder)
+    try:
+        logging.debug(f"Running yt-dlp with command: {' '.join(command)}")
 
-        if os.path.exists(video_path):
-            logging.info(f"✅ File already exists: {video_path}")
+        # ✅ Redirect yt-dlp output directly to the log file
+        with open(yt_dlp_log_filename, "w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT, text=True)
 
-            try:
-                upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
+        # ✅ Initialize progress bar ONLY IF downloading starts
+        progress_bar = None
 
-                if not has_existing_metadata(video_path, upload_date):
-                    logging.info(f"🛠 Metadata missing. Embedding metadata for: {video_path}")
-                    apply_upload_dates(video_path, upload_date)
-                else:
-                    logging.info("✅ Metadata already embedded. Skipping.")
+        while process.poll() is None:
+            time.sleep(1)
 
-            except ValueError as e:
-                logging.error(f"⚠️ Error parsing upload date for {video['title']}: {e}")
-                continue
+            if not os.path.exists(yt_dlp_log_filename):
+                continue  # ✅ Retry if the log file hasn't been created yet
 
-        else:
-            final_video_path = os.path.join(PLEX_DIRECTORY, uploader, f"{uploader} - {sanitized_title}.mp4")
-            video_path = os.path.join(STAGING_DIRECTORY, uploader, f"{uploader} - {sanitized_title}.mp4")
+            with open(yt_dlp_log_filename, "r") as log_reader:
+                log_content = log_reader.readlines()
 
-            file_in_staging = os.path.exists(video_path)
-            file_in_plex = os.path.exists(final_video_path)
-
-            if file_in_staging or file_in_plex:
-                logging.info(f"✅ Already exists, skipping download: {final_video_path if file_in_plex else video_path}")
-                continue
-
-            logging.info(f"📥 Downloading to STAGING: {video['title']} ({video['upload_date']})")
-
-            command = YTDLP_OPTIONS + [video["url"]]
-
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            already_in_archive = False
-
-            for line in process.stdout:
+            for line in reversed(log_content):
                 line = line.strip()
-                if not line or any(skip in line for skip in ["[download]", "[ffmpeg]"]):
-                    continue
-                if "has already been recorded in the archive" in line:
-                    already_in_archive = True
-                if "Downloading" in line or "Merging formats into" in line:
-                    logging.info(line)
 
-            process.wait()
+                # ✅ Detect when yt-dlp actually starts downloading
+                if "[download]" in line and "Destination" in line and not download_started:
+                    logging.info(f"📥 Downloading: {video_url}")
+                    download_started = True
 
-            if process.returncode != 0:
-                logging.error(f"⚠️ Download failed for {video['title']} (exit code {process.returncode})")
-                continue
+                # ✅ Ensure progress bar only starts if downloading begins
+                if download_started and not progress_bar:
+                    progress_bar = tqdm(total=100, desc="Downloading", unit="%", dynamic_ncols=True, leave=True)
 
-            if not os.path.exists(video_path):
-                logging.error(f"⚠️ Expected file missing: {video_path}")
-                continue
+                # ✅ Extract progress percentage
+                match = re.search(r"(\d{1,3}\.\d+)%", line)
+                if match and progress_bar:
+                    percent_complete = float(match.group(1))
+                    progress_bar.n = int(percent_complete)
+                    progress_bar.refresh()
+                    break
 
-            try:
-                upload_date = datetime.strptime(video["upload_date"], "%Y-%m-%dT%H:%M:%S")
-                apply_upload_dates(video_path, upload_date)
-            except ValueError as e:
-                logging.error(f"⚠️ Error parsing upload date: {e}")
-                continue
+        process.wait()
+        if progress_bar:
+            progress_bar.close()
 
-            final_uploader_folder = os.path.join(PLEX_DIRECTORY, uploader)
+        cleanup_old_logs()
 
-            if not os.path.exists(final_uploader_folder):
-                os.makedirs(final_uploader_folder)
+        return process.returncode == 0  # ✅ True if download succeeded, False otherwise
 
-            try:
-                for file in os.listdir(uploader_folder):
-                    if file.startswith(f"{uploader} - {sanitized_title}"):
-                        source_path = os.path.join(uploader_folder, file)
-                        destination_path = os.path.join(final_uploader_folder, file)
-                        shutil.move(source_path, destination_path)
-                        logging.info(f"✅ Moved {file} to Plex: {destination_path}")
-            except Exception as e:
-                logging.error(f"⚠️ Move failed: {e}")
-                continue
-
-            if already_in_archive:
-                logging.info("⏭️ Skipping sleep since video was already recorded in the archive.")
-                continue
-
-            sleep_time = random.randint(30, 60)
-            logging.info(f"⏳ Sleeping for {sleep_time} seconds...")
-            time.sleep(sleep_time)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"❌ Failed to download {video_url}: {e}")
+        return None  # ❌ Return None if yt-dlp encountered an unexpected error

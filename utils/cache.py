@@ -1,45 +1,11 @@
 import json
+import logging
 import os
 import threading
-import sqlite3
 
 cache_lock = threading.Lock()  # Prevent multiple processes from corrupting the cache
-DB_FILE = "video_tracking.db"  # SQLite database for long-term tracking
 
-# Ensure SQLite DB is initialized
-def init_db():
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS last_downloaded (
-                channel TEXT PRIMARY KEY,
-                last_video_url TEXT,
-                last_upload_date TEXT
-            )
-        """
-        )
-        conn.commit()
 
-init_db()
-
-# SQLite helper functions
-def get_last_downloaded(channel):
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT last_upload_date FROM last_downloaded WHERE channel = ?", (channel,))
-        row = cursor.fetchone()
-        return row[0] if row else None
-
-def update_last_downloaded(channel, video_url, upload_date):
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "REPLACE INTO last_downloaded (channel, last_video_url, last_upload_date) VALUES (?, ?, ?)",
-            (channel, video_url, upload_date)
-        )
-        conn.commit()
-
-# JSON Cache Management
 def load_cache(cache_file):
     """Loads the cache from file, handling JSON errors and empty files gracefully."""
     try:
@@ -47,29 +13,31 @@ def load_cache(cache_file):
             return {}  # Avoid JSON errors for empty files
         with open(cache_file, "r", encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (json.JSONDecodeError, FileNotFoundError):
         return {}
 
-def save_cache(cache, cache_file, last_processed_video=None, channel=None, finalize=False):
-    """Efficiently updates the cache, preventing race conditions and corruption."""
 
-    existing_cache = load_cache(cache_file)
+def save_cache(cache, cache_file, finalize=True):
+    """Saves the cache incrementally to prevent loss of metadata."""
+    with cache_lock:
+        try:
+            # Load existing cache to avoid overwriting old data
+            existing_cache = load_cache(cache_file)
 
-    with cache_lock:  # Lock only during write operations
-        if existing_cache and cache:
-            existing_cache.update(cache)
+            # Merge new data with the existing cache
+            for channel, videos in cache.items():
+                if channel not in existing_cache:
+                    existing_cache[channel] = []
+                for video in videos:
+                    if video["url"] not in [v["url"] for v in existing_cache[channel]]:
+                        existing_cache[channel].append(video)
 
-        if last_processed_video and channel:
-            existing_cache[channel + "_in_progress"] = last_processed_video["upload_date"]
-            update_last_downloaded(channel, last_processed_video["url"], last_processed_video["upload_date"])
+            # Write updated cache back to file
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(existing_cache, f, indent=4)
 
-        if finalize and channel:
-            existing_cache.pop(channel + "_in_progress", None)
+            if finalize:
+                logging.info("✅ Metadata cache successfully updated.")
 
-        temp_file = cache_file + ".tmp"
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(existing_cache, f, indent=4) #type: ignore
-            f.flush()
-            os.fsync(f.fileno())
-
-        os.replace(temp_file, cache_file)  # Fully atomic on all platforms
+        except Exception as e:
+            logging.error(f"⚠ Failed to save cache: {str(e)}")
