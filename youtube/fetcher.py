@@ -134,7 +134,8 @@ def get_all_videos():
         cookies_path = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
 
         # Fetch video URLs (ONE AT A TIME)
-        yt_dlp_command = ["yt-dlp", "--flat-playlist", "--cookies", cookies_path, "--dump-json", channel]
+        yt_dlp_command = ["yt-dlp", "--flat-playlist", "--cookies", cookies_path, "--dump-json", "--playlist-reverse",
+                          channel]
 
         with subprocess.Popen(yt_dlp_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                               bufsize=1) as process:
