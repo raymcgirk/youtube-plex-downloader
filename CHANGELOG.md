@@ -1,4 +1,3 @@
-# Changelog
 # 🎉 YouTube Plex Downloader v2.0.1 - Stability & Performance Improvements (March 2025)
 
 ## 🔹 What's New?
@@ -15,9 +14,29 @@
 - Now correctly reads and writes to `downloaded.txt`, preventing unnecessary re-downloads.  
 
 **Improved File Movement & Cleanup**  
-- **Fixed colon (`:`) issue** in filenames by using `sanitize_filename()`.  
+- **Fixed special character issues** in filenames by using `sanitize_filename()`.  
 - **Deletes embedded thumbnail `.jpg`** after metadata is added.  
 - **Ensures video files move correctly** to Plex, even when yt-dlp modifies the filename.  
+
+**Fetching & Logging Overhaul**
+- **Switched video processing logic**:  
+  - Due to YouTube rate limiting, we no longer fetch all metadata at once.  
+  - Videos are now processed **one at a time**, fetching metadata, downloading, embedding metadata, and moving to Plex before fetching the next video.  
+  - This prevents bans and ensures videos are downloaded **without hitting server limits**.  
+
+- **Enhanced Logging**:
+  - **yt-dlp logs are now stored separately** (`logs/yt-dlp-debug_YYYY-MM-DD.log`).  
+  - **Old yt-dlp logs (30+ days) are automatically deleted**.  
+  - **Set yt-dlp logging logic at `logger.py`** to keep code modular and clean.  
+
+- **Cache System Overhaul**:
+  - **Removed SQLite support** and now store metadata **exclusively in `video_cache.json`**.  
+  - **Fixed cache saving logic** to avoid metadata overwrites.  
+  - **Implemented incremental caching** so no metadata is lost if interrupted.  
+
+- **Plex Integration Fixes**:
+  - **Fixed an issue where downloaded videos were not correctly moved** to the Plex directory.  
+  - **Ensured videos are only moved after metadata embedding is complete**.  
 
 ## 🔹 Bug Fixes
 - **Fixed issue where videos were not detected as downloaded.**  
@@ -27,42 +46,9 @@
 - **Fixed incorrect Plex folder paths preventing proper file organization.**  
 
 ---
-- **This version is more reliable, faster, and handles interruptions better.**  
-- **Feedback & bug reports welcome!**  
 
----
-
-### **v2.0.1 - Fetching & Logging Overhaul (March 2025)**
-
-#### **Major Changes:**
-- **Switched video processing logic**: 
-  - Due to YouTube rate limiting, we no longer fetch all metadata at once.
-  - Videos are now processed **one at a time**, fetching metadata, downloading, embedding metadata, and moving to Plex before fetching the next video.
-  - This prevents bans and ensures videos are downloaded **without hitting server limits**.
-
-#### **Improvements:**
-- **Enhanced Logging:**
-  - **yt-dlp logs are now stored separately** (`logs/yt-dlp-debug_YYYY-MM-DD.log`).
-  - **Old yt-dlp logs (30+ days) are automatically deleted**.
-  - **Set yt-dlp logging logic at `logger.py`** to keep code modular and clean.
-
-- **Cache System Overhaul:**
-  - **Removed SQLite support** and now store metadata **exclusively in `video_cache.json`**.
-  - **Fixed cache saving logic** to avoid metadata overwrites.
-  - **Implemented incremental caching** so no metadata is lost if interrupted.
-
-- **Plex Integration Fixes:**
-  - **Fixed an issue where downloaded videos were not correctly moved** to the Plex directory.
-  - **Ensured videos are only moved after metadata embedding is complete**.
-
-#### **Fixes:**
-- **Fixed yt-dlp command issues**, including removing `--rm-cache-dir`, which caused downloads to fail.
-- **Resolved file path issues preventing videos from moving correctly to Plex**.
-- **Prevented redundant metadata requests** by properly checking the cache before fetching data.
-
-#### **Breaking Changes:**
-- **Existing `video_cache.json` is still compatible**, but **SQLite is no longer supported**.
-- **All logs are now stored in `logs/`**, so old log paths will no longer be valid.
+**This version is more reliable, faster, and handles interruptions better.**  
+**Feedback & bug reports welcome!**
 
 ---
 
