@@ -5,6 +5,7 @@ config/config.json
 __pycache__/
 *.pyc
 .venv/
+.idea/
 
 # Ignore cache and sensitive files
 cookies.txt
@@ -21,3 +22,4 @@ logs/
 # Ignore output folders and files
 downloads/
 downloaded.txt
+*.zip
