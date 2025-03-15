@@ -1,4 +1,37 @@
 # Changelog
+# 🎉 YouTube Plex Downloader v2.0.1 - Stability & Performance Improvements (March 2025)
+
+## 🔹 What's New?
+**Resumable Downloads**  
+- Removed `--no-part`, allowing interrupted downloads to resume instead of restarting from 0%.  
+- Now only re-downloads **unfinished parts**, reducing data loss.  
+
+**Increased Download Speed**  
+- **Boosted download speed** from **2MB/s → 5MB/s** (150% faster!).  
+- Ensures a balance between speed and avoiding YouTube rate limits.  
+
+**Correct Archive Handling**  
+- Fixed `downloaded.txt` path issue.  
+- Now correctly reads and writes to `downloaded.txt`, preventing unnecessary re-downloads.  
+
+**Improved File Movement & Cleanup**  
+- **Fixed colon (`:`) issue** in filenames by using `sanitize_filename()`.  
+- **Deletes embedded thumbnail `.jpg`** after metadata is added.  
+- **Ensures video files move correctly** to Plex, even when yt-dlp modifies the filename.  
+
+## 🔹 Bug Fixes
+- **Fixed issue where videos were not detected as downloaded.**  
+- **Fixed script failing to move files after download.**  
+- **Fixed unnecessary sleep timer when videos were already downloaded.**  
+- **Resolved issue where yt-dlp’s filename changes caused move failures.**  
+- **Fixed incorrect Plex folder paths preventing proper file organization.**  
+
+---
+- **This version is more reliable, faster, and handles interruptions better.**  
+- **Feedback & bug reports welcome!**  
+
+---
+
 ### **v2.0.1 - Fetching & Logging Overhaul (March 2025)**
 
 #### **Major Changes:**
@@ -60,7 +93,7 @@
 
 ---
 
-## V1.3.5 - Stability & Major Bug Fixes  (March 12, 2025) 
+## V1.3.5 - Stability & Major Bug Fixes  (March 2025) 
 ### Critical Fixes
 Fixed _latest Setting Too Early, Causing Skipped Videos
 - Issue: _latest was being set as soon as caching started, meaning if the script was interrupted, it would skip videos on the next run.
@@ -92,7 +125,7 @@ Prevented Hanging on Member-Only & Live Videos
 
 ---
 
-## v1.3.4 - Real-Time Cache Updates & Logging Fixes (March 12, 2025)
+## v1.3.4 - Real-Time Cache Updates & Logging Fixes (March 2025)
 ### Bug Fixes & Optimizations
 - Real-time cache updates: The script now saves each video immediately after processing, instead of waiting for the entire channel to finish.
 - Fixed a bug where all channels were processed before writing in blocks of 10. This caused unnecessary delays, especially for large channels with thousands of videos.
@@ -105,7 +138,7 @@ Prevented Hanging on Member-Only & Live Videos
 
 ---
 
-## v1.3.3 - Incremental Cache Saves & Logging Improvements (March 12, 2025)
+## v1.3.3 - Incremental Cache Saves & Logging Improvements (March 2025)
 ### Bug Fixes & Optimizations
 - Incremental cache updates: The script now saves the cache every 10 videos instead of waiting for the entire channel to be processed. This prevents data loss if the script crashes mid-fetch.
 - Improved crash resilience: In the event of an error or interruption, the script now resumes from the last saved state, preventing unnecessary re-fetching of thousands of videos.
@@ -118,7 +151,7 @@ Prevented Hanging on Member-Only & Live Videos
 
 ---
 
-## v1.3.2 - Hotfix for New Channel Detection (March 12, 2025)
+## v1.3.2 - Hotfix for New Channel Detection (March 2025)
 ### Bug Fixes
 - Fixed an issue where newly enabled channels were not being detected properly and did not fetch videos.
 - The script now correctly updates video_cache.json when a new channel is added, ensuring new videos are downloaded without affecting existing cached data.
@@ -129,7 +162,7 @@ Prevented Hanging on Member-Only & Live Videos
 
 ---
 
-## v1.3.1 - Bug Fixes & Optimizations (March 12, 2025)
+## v1.3.1 - Bug Fixes & Optimizations (March 2025)
 
 ### Bug Fixes
 - Fixed an issue where only one channel was downloading due to caching not updating correctly.
