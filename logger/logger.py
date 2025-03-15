@@ -1,10 +1,6 @@
 import logging
 import os
-import time
-from datetime import datetime
-
-LOG_DIR = "logs"  # Adjust if needed
-RETENTION_DAYS = 30  # Change this to configure how long logs should be kept
+from datetime import datetime, timedelta
 
 def setup_logger():
     log_directory = "logs"
@@ -21,21 +17,21 @@ def setup_logger():
         ],
     )
 
-def purge_old_logs():
-    """Deletes logs older than RETENTION_DAYS from the logs directory."""
-    now = time.time()
-    cutoff = now - (RETENTION_DAYS * 86400)  # Convert days to seconds
+def get_yt_dlp_log_path():
+    """Returns the file path for yt-dlp logging."""
+    log_directory = "logs"
+    os.makedirs(log_directory, exist_ok=True)
+    return os.path.join(log_directory, f"yt-dlp-debug_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
 
-    if not os.path.exists(LOG_DIR):
-        return  # No logs to purge
+def cleanup_old_logs(log_directory="logs", prefix="yt-dlp-debug_", days=30):
+    """Deletes yt-dlp logs older than 30 days."""
+    cutoff_date = datetime.now() - timedelta(days=days)
 
-    for log_file in os.listdir(LOG_DIR):
-        log_path = os.path.join(LOG_DIR, log_file)
-        if os.path.isfile(log_path):
-            file_mtime = os.path.getmtime(log_path)
-            if file_mtime < cutoff:
+    for filename in os.listdir(log_directory):
+        if filename.startswith(prefix):
+            log_path = os.path.join(log_directory, filename)
+            file_time = datetime.fromtimestamp(os.path.getmtime(log_path))
+
+            if file_time < cutoff_date:
                 os.remove(log_path)
-                print(f"🧹 Deleted old log: {log_file}")
-
-# Call this function on startup
-purge_old_logs()
+                logging.info(f"🗑 Deleted old log: {log_path}")
