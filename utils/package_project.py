@@ -14,7 +14,7 @@ logging.debug(f"PROJECT_ROOT resolved to: {PROJECT_ROOT}")
 # Define distribution directory
 DIST_DIR = PROJECT_ROOT / "dist"
 DIST_DIR.mkdir(exist_ok=True)  # Ensure dist directory exists
-ZIP_NAME = DIST_DIR / "YouTube-Plex-Downloader-v2.0.1.zip"
+ZIP_NAME = DIST_DIR / "YouTube-Plex-Downloader-v2.0.2.zip"
 
 def get_gitignore_patterns():
     """Read .gitignore and return a list of patterns to ignore, ensuring .git/ is always ignored."""

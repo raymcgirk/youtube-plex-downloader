@@ -1,3 +1,14 @@
+#  YouTube Plex Downloader v2.0.2 - Metadata Embedding Fix (March 2025)
+
+## 🔹 What's New?
+- **Added 'apply_upload_date.py' which can be run separate from main.py just to fetch and update metadata on all existing videos.**
+- **Added 'cookie_fetcher.py' which will be used in a future update to automatically fetch browser cookies.**
+
+## 🔹 Bug Fixes
+- **Fixed issue where metadata was not properly being embedded.**  
+
+---
+
 # 🎉 YouTube Plex Downloader v2.0.1 - Stability & Performance Improvements (March 2025)
 
 ## 🔹 What's New?
